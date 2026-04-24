@@ -1,0 +1,17 @@
+{
+  "name": "bmad-test",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Minimalist, reference-quality single-user todo app. Root orchestration only.",
+  "type": "module",
+  "scripts": {
+    "postinstall": "npm install --prefix client && npm install --prefix server",
+    "dev": "node scripts/dev.mjs",
+    "build": "npm run build --prefix client && npm run build --prefix server",
+    "start": "npm start --prefix server",
+    "test": "echo \"tests arrive in Story 1.8\" && exit 0"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}
