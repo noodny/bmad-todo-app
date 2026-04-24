@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 import { existsSync } from "node:fs";
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
+import { closeDb, listTasks } from "./db.js";
 
 const DEFAULT_PORT = 3000;
 const portRaw = Number(process.env.PORT ?? DEFAULT_PORT);
@@ -25,9 +26,7 @@ const app = Fastify({
 
 // Placeholder API surface — the real /api/tasks CRUD handlers arrive in Story 1.3.
 // MUST register before @fastify/static so the SPA catchall does not shadow /api/*.
-app.get("/api/tasks", async () => {
-  return [];
-});
+app.get("/api/tasks", async () => listTasks());
 
 if (isProduction) {
   const here = dirname(fileURLToPath(import.meta.url));
@@ -45,42 +44,54 @@ if (isProduction) {
     root: clientDist,
     wildcard: false,
   });
-  app.setNotFoundHandler((request, reply) => {
+  app.setNotFoundHandler(async (request, reply) => {
     if (request.url.startsWith("/api/")) {
-      reply
-        .code(404)
-        .send({
-          statusCode: 404,
-          error: "Not Found",
-          message: "Unknown API route",
-        });
+      reply.code(404).send({
+        statusCode: 404,
+        error: "Not Found",
+        message: "Unknown API route",
+      });
       return;
     }
-    reply
-      .type("text/html")
-      .sendFile("index.html")
-      .catch((err) => {
-        app.log.error(`Failed to send index.html: ${err.message}`);
-        reply
-          .code(500)
-          .send({
-            statusCode: 500,
-            error: "Internal Server Error",
-            message: "Failed to load SPA shell",
-          });
-      });
+    try {
+      return await reply.type("text/html").sendFile("index.html");
+    } catch (err) {
+      app.log.error(
+        `Failed to send index.html: ${(err as Error).message}`,
+      );
+      if (!reply.sent) {
+        reply.code(500).send({
+          statusCode: 500,
+          error: "Internal Server Error",
+          message: "Failed to load SPA shell",
+        });
+      }
+    }
   });
 }
 
 // Graceful shutdown handlers
-const gracefulShutdown = async (sig) => {
+let shuttingDown = false;
+const gracefulShutdown = async (sig: NodeJS.Signals) => {
+  if (shuttingDown) {
+    app.log.info(`Received ${sig}; shutdown already in progress, ignoring.`);
+    return;
+  }
+  shuttingDown = true;
   app.log.info(`Received ${sig}; closing server gracefully...`);
   try {
     await app.close();
+    try {
+      closeDb();
+    } catch (dbErr) {
+      app.log.error({ err: dbErr }, "Error closing DB during shutdown");
+    }
     app.log.info("Server closed successfully");
     process.exit(0);
   } catch (err) {
-    app.log.error(`Error during graceful shutdown: ${err.message}`);
+    app.log.error(
+      `Error during graceful shutdown: ${(err as Error).message}`,
+    );
     process.exit(1);
   }
 };

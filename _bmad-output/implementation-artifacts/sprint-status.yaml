@@ -45,7 +45,7 @@ development_status:
   # Epic 1: Task Management & Persistent List (Happy Path)
   epic-1: in-progress
   1-1-project-scaffold-orchestration: done
-  1-2-task-persistence-layer-sqlite-schema-repository: backlog
+  1-2-task-persistence-layer-sqlite-schema-repository: done
   1-3-task-rest-api-get-post-patch-delete: backlog
   1-4-frontend-design-foundation-shadcn-ui-theme-layout: backlog
   1-5-taskinput-single-field-entry-with-keyboard-commit: backlog
