@@ -1,27 +1,25 @@
 import type { KeyboardEvent } from "react";
-import { X } from "lucide-react";
+import { AlertCircle, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
-import type { Task } from "@/api/types";
+import type { ClientTask } from "@/state/tasksReducer";
 
 interface TaskItemProps {
-  task: Task;
+  task: ClientTask;
   onToggle: (id: string, completed: boolean) => void;
   onDelete: (id: string) => void;
+  onRetry: (id: string) => void;
 }
 
-function TaskItem({ task, onToggle, onDelete }: TaskItemProps) {
+function TaskItem({ task, onToggle, onDelete, onRetry }: TaskItemProps) {
   const textId = `task-${task.id}-text`;
+  const isFailed = task.status === "failed";
 
   const handleKeyDown = (e: KeyboardEvent<HTMLLIElement>) => {
-    // Ignore keys that originated inside an interactive child (the
-    // checkbox or the delete button) so their own handlers stay
-    // authoritative.
+    // Skip events from interactive children unless they're row-level navigation.
     const target = e.target as HTMLElement;
     if (target !== e.currentTarget) {
-      // Still handle ArrowUp/ArrowDown at the row level even if focus
-      // happens to be on a child — the user's intent is to navigate
-      // rows, not anything child-specific.
       if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
     }
 
@@ -68,6 +66,11 @@ function TaskItem({ task, onToggle, onDelete }: TaskItemProps) {
         task.completed && "opacity-60",
       )}
     >
+      {isFailed && (
+        <span role="img" aria-label="Save failed" className="p-3.5">
+          <AlertCircle className="size-4 text-destructive" />
+        </span>
+      )}
       {/* 44x44 checkbox hit area */}
       <div className="p-3.5">
         <Checkbox
@@ -87,20 +90,30 @@ function TaskItem({ task, onToggle, onDelete }: TaskItemProps) {
       >
         {task.text}
       </span>
-      {/* Delete X */}
-      <button
-        type="button"
-        aria-label={`Delete task: ${task.text}`}
-        onClick={() => onDelete(task.id)}
-        className={cn(
-          "p-3.5 opacity-0 transition-opacity duration-150 ease-out outline-none",
-          "group-hover:opacity-100 group-focus-within:opacity-100",
-          "[@media(hover:none)]:opacity-60",
-          "focus-visible:opacity-100",
-        )}
-      >
-        <X className="size-4" />
-      </button>
+      {isFailed ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-label={`Retry saving task: ${task.text}`}
+          onClick={() => onRetry(task.id)}
+        >
+          Retry
+        </Button>
+      ) : (
+        <button
+          type="button"
+          aria-label={`Delete task: ${task.text}`}
+          onClick={() => onDelete(task.id)}
+          className={cn(
+            "p-3.5 opacity-0 transition-opacity duration-150 ease-out outline-none",
+            "group-hover:opacity-100 group-focus-within:opacity-100",
+            "[@media(hover:none)]:opacity-60",
+            "focus-visible:opacity-100",
+          )}
+        >
+          <X className="size-4" />
+        </button>
+      )}
     </li>
   );
 }

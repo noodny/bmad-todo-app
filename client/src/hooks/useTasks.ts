@@ -9,17 +9,19 @@ import type { Task } from "@/api/types";
 import {
   initialState,
   tasksReducer,
+  type ClientTask,
   type State,
 } from "@/state/tasksReducer";
 
 interface UseTasksReturn {
-  tasks: Task[];
+  tasks: ClientTask[];
   isLoading: boolean;
   loadError: string | null;
   createTask: (text: string) => void;
   toggleTask: (id: string, completed: boolean) => void;
   deleteTask: (id: string) => void;
   retryInitialLoad: () => void;
+  retryMutation: (id: string) => void;
 }
 
 const SLOW_LOAD_MS = 10_000;
@@ -28,12 +30,14 @@ export const LOAD_FAIL_MESSAGE = "Could not load tasks.";
 export function useTasks(): UseTasksReturn {
   const [state, dispatch] = useReducer(tasksReducer, initialState);
 
-  // Keep a ref of the current tasks list so the memoized mutation callbacks
-  // can snapshot `previousTasks` for ROLLBACK without going stale.
+  // Latest tasks ref — read by retryMutation to look up pendingMutation by id.
   const tasksRef = useRef<State["tasks"]>(state.tasks);
   useEffect(() => {
     tasksRef.current = state.tasks;
   }, [state.tasks]);
+
+  // In-flight retry guard — bails on rapid double-clicks of the same row's Retry.
+  const retryInFlightRef = useRef<Set<string>>(new Set());
 
   // Cleanup of the most recent initial-load attempt — retry aborts it first.
   const loadCleanupRef = useRef<(() => void) | null>(null);
@@ -61,8 +65,7 @@ export function useTasks(): UseTasksReturn {
         if (resolved) return;
         resolved = true;
         clearTimeout(slowTimer);
-        // Suppress AbortError: it surfaces from our own slow-load abort
-        // (the timer's dispatch already fired the FAIL) or from unmount.
+        // Suppress AbortError from our own slow-load abort or unmount.
         if (err instanceof DOMException && err.name === "AbortError") return;
         console.error("Initial load failed:", err);
         dispatch({ type: "INITIAL_LOAD_FAIL", message: LOAD_FAIL_MESSAGE });
@@ -91,48 +94,56 @@ export function useTasks(): UseTasksReturn {
 
   const createTask = useCallback((text: string) => {
     const id = crypto.randomUUID();
-    const optimistic: Task = {
-      id,
-      text,
-      completed: false,
-      createdAt: Date.now(),
-    };
-    const previousTasks = tasksRef.current;
-    dispatch({ type: "OPTIMISTIC_ADD", task: optimistic });
+    dispatch({
+      type: "OPTIMISTIC_ADD",
+      task: { id, text, completed: false, createdAt: Date.now() },
+    });
     apiCreateTask({ id, text })
-      .then((serverTask) => {
-        dispatch({ type: "SYNC_OK", id, task: serverTask });
-      })
+      .then((task) => dispatch({ type: "SYNC_OK", id, task }))
       .catch((err: unknown) => {
         console.error("Create task failed:", err);
-        dispatch({ type: "ROLLBACK", previousTasks });
+        dispatch({ type: "SYNC_FAIL", id });
       });
   }, []);
 
   const toggleTask = useCallback((id: string, completed: boolean) => {
-    const previousTasks = tasksRef.current;
     dispatch({ type: "OPTIMISTIC_TOGGLE", id, completed });
     apiUpdateTask(id, { completed })
-      .then(() => {
-        dispatch({ type: "SYNC_OK", id });
-      })
+      .then(() => dispatch({ type: "SYNC_OK", id }))
       .catch((err: unknown) => {
         console.error("Update task failed:", err);
-        dispatch({ type: "ROLLBACK", previousTasks });
+        dispatch({ type: "SYNC_FAIL", id });
       });
   }, []);
 
   const deleteTask = useCallback((id: string) => {
-    const previousTasks = tasksRef.current;
     dispatch({ type: "OPTIMISTIC_DELETE", id });
     apiDeleteTask(id)
-      .then(() => {
-        dispatch({ type: "SYNC_OK", id });
-      })
+      .then(() => dispatch({ type: "SYNC_OK", id }))
       .catch((err: unknown) => {
         console.error("Delete task failed:", err);
-        dispatch({ type: "ROLLBACK", previousTasks });
+        dispatch({ type: "SYNC_FAIL", id });
       });
+  }, []);
+
+  const retryMutation = useCallback((id: string) => {
+    if (retryInFlightRef.current.has(id)) return;
+    const task = tasksRef.current.find((t) => t.id === id);
+    if (!task?.pendingMutation) return;
+    retryInFlightRef.current.add(id);
+    dispatch({ type: "RETRY", id });
+    const m = task.pendingMutation;
+    const promise =
+      m === "create" ? apiCreateTask({ id, text: task.text })
+      : m === "toggle" ? apiUpdateTask(id, { completed: task.completed })
+      : apiDeleteTask(id);
+    promise
+      .then((r) => dispatch({ type: "SYNC_OK", id, task: m === "create" ? (r as Task) : undefined }))
+      .catch((err: unknown) => {
+        console.error(`Retry ${m} failed:`, err);
+        dispatch({ type: "SYNC_FAIL", id });
+      })
+      .finally(() => retryInFlightRef.current.delete(id));
   }, []);
 
   return {
@@ -143,5 +154,6 @@ export function useTasks(): UseTasksReturn {
     toggleTask,
     deleteTask,
     retryInitialLoad,
+    retryMutation,
   };
 }

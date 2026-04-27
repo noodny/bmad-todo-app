@@ -7,31 +7,12 @@ import TaskList from "@/components/TaskList";
 import { useTasks, LOAD_FAIL_MESSAGE } from "@/hooks/useTasks";
 
 function App() {
-  const { tasks, isLoading, loadError, createTask, toggleTask, deleteTask, retryInitialLoad } = useTasks();
+  const { tasks, isLoading, loadError, createTask, toggleTask, deleteTask, retryInitialLoad, retryMutation } = useTasks();
 
-  // Story 2.1 AC5: when the list transitions to empty (e.g. user deletes the
-  // last task), park focus back in the input. Idempotent — also re-fires on
-  // the initial empty render, where TaskInput's mount-time autofocus already
-  // owns the input, so .focus() is a harmless no-op.
+  // Story 2.1 AC5: park focus in input when the list goes empty.
   useEffect(() => {
     if (!isLoading && tasks.length === 0) {
-      // SSR compatibility guard
-      if (typeof document === "undefined") return;
-
-      try {
-        const inputElement = document.getElementById("task-input") as HTMLInputElement | null;
-        // Type safety: verify element exists and is focusable
-        if (inputElement && typeof inputElement.focus === "function") {
-          // Accessibility guard: avoid stealing focus if user is actively interacting elsewhere
-          const activeElement = document.activeElement;
-          if (activeElement !== inputElement) {
-            inputElement.focus();
-          }
-        }
-      } catch (error) {
-        // Silently handle focus failures (browser restrictions, etc.)
-        console.warn("Failed to focus task input:", error);
-      }
+      document.getElementById("task-input")?.focus();
     }
   }, [tasks.length, isLoading]);
 
@@ -55,6 +36,7 @@ function App() {
           isLoading={isLoading}
           onToggle={toggleTask}
           onDelete={deleteTask}
+          onRetry={retryMutation}
         />
       </div>
     </main>

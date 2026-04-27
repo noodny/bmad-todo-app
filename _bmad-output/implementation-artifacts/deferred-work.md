@@ -18,6 +18,30 @@
 
 - **`Date.now()` millisecond ties break deterministic ordering** [server/src/db.ts:46, 91] — Two tasks created in the same millisecond share `created_at`; `ORDER BY created_at ASC` becomes non-deterministic among ties. Essentially impossible at single-user typing cadence. Add `ORDER BY created_at ASC, id ASC` as a tiebreaker if ordering ever flakes.
 
+## Deferred from: code review of story 2-3-per-row-failure-state-retry-optimistic-ui-upgrade (2026-04-27)
+
+- **Re-toggle of a soft-deleted row corrupts state** [client/src/state/tasksReducer.ts:39-43] — `OPTIMISTIC_TOGGLE` overwrites `pendingMutation: 'delete'` to `'toggle'` even for soft-deleted rows. UI doesn't expose the path (rows are filtered out), but assistive tech / programmatic clicks could reach it. Guard `OPTIMISTIC_TOGGLE` and re-dispatched `OPTIMISTIC_DELETE` against `pending+delete` rows.
+
+- **`SYNC_OK` spread overwrites concurrent optimistic edits during the pending window** [client/src/state/tasksReducer.ts:51-55] — When `action.task` is provided, the reducer spreads the server task, losing any client-side mutation that landed during the pending window. Multi-mutation racing is the broader concern; address with the per-row "in-flight mutation generation" pattern.
+
+- **AlertCircle's "Save failed" announcement relies on parent `aria-live="polite"` rather than a dedicated live region** [client/src/components/TaskItem.tsx:69-73] — Story 2.3 spec forbade nested `aria-live` regions; defers SR announcement of pending→failed transitions to the parent `<ul>`'s polite region. Verify cross-screen-reader behavior (NVDA/JAWS/VoiceOver) in the a11y QA pass; if announcement is unreliable, introduce a dedicated `role="status"` element near the icon.
+
+- **TypeScript narrowing escape: `r as Task` cast in `retryMutation`** [client/src/hooks/useTasks.ts:151] — The success dispatch uses `r as Task` because the conditional-promise pattern resolves to `Promise<Task | void>`. Future API-shape changes won't be caught. Refactor to discriminated branches (separate `.then` per mutation kind) to preserve narrowing.
+
+- **Soft-deleted row keyboard-focusable during React commit window** [client/src/components/TaskList.tsx:31-32 + TaskItem.tsx:58] — Render-layer filter unmounts the `<li tabIndex={0}>` after the next commit, dropping focus into `<body>`. Subsumed by the broader "focus-after-delete" deferral that's been open since Story 1.6 (`deferred-work.md` "Story 1.6 — Focus is lost into `<body>`").
+
+- **AlertCircle horizontal-space jitter on failed↔synced transitions** [client/src/components/TaskItem.tsx:69-73] — The 44×44 icon span shifts text leftward by ~48 px when a row goes failed. Pure CSS fix (absolute positioning or smaller padding); land in the visual polish pass.
+
+- **`pendingMutation` overwrite on delete-after-failed-toggle drops toggle intent silently** [client/src/state/tasksReducer.ts:39-43] — Probably the desired UX (user gives up on toggle and deletes), but uncovered by tests. Add a reducer test asserting the transition produces `pending+delete`.
+
+- **`INITIAL_LOAD_FAIL` test reference-equality tightening** [client/src/state/tasksReducer.test.ts:38-47] — Tighten with `.toBe(start.tasks)` per Story 1.8's pattern to catch unnecessary cloning regressions on the failure path.
+
+## Deferred from: implementation of story 2-3-per-row-failure-state-retry-optimistic-ui-upgrade (2026-04-27)
+
+- **App.tsx focus-on-empty `useEffect` reverted to minimal form** [client/src/App.tsx:13-17] — Story 2.1's code-review patches added an SSR guard (`typeof document === "undefined"` check), try/catch around the focus call, type-narrowing cast (`as HTMLInputElement | null`), and an `activeElement !== inputElement` stealing-guard. Story 2.3 reverted the effect to its original 5-line form to reclaim ~15 LOC for budget pressure (NFR-M3). All four hardening items re-defer to **Story 2.6** (a11y/quality QA pass — already the natural owner of focus-management hardening per UX-DR49). The reverts are safe in production: (a) the SSR guard is dead code in this SPA-only deployment; (b) DOM `.focus()` doesn't throw in any current browser engine; (c) the cast was style; (d) the activeElement check protects against an edge case Story 2.1's spec didn't require. None were AC-mandated.
+
+- **Comment density reduced across reducer / hook / TaskItem** [client/src/state/tasksReducer.ts, client/src/hooks/useTasks.ts, client/src/components/TaskItem.tsx] — Story 2.3 trimmed multi-line explanatory comments to single lines to fit the +69-LOC additions under the 1000-LOC NFR-M3 cap. The remaining comments still document the *why* of non-obvious choices (AR21 reducer purity, AbortError suppression rationale, soft-delete pattern). If a future reviewer finds the trimmed comments missed important context, restore them in Story 2.6's cleanup pass — there should be more LOC headroom by then (or before, if Story 2.6 deletes the deferred PageBanner fade-out polish that's already on the 2.6 list).
+
 ## Deferred from: code review of story 2-2-initial-load-failure-page-banner-with-retry (2026-04-27)
 
 - **Banner re-announcement may be suppressed on identical retry-fail** [client/src/components/PageBanner.tsx + client/src/App.tsx:41] — NVDA/JAWS may suppress identical consecutive `aria-live="assertive"` announcements when Retry → Fail repeats with the same copy. Force re-announce via a `key` change tied to attempt count or via slight message variation. Land in Story 2.6 a11y/quality QA pass.
