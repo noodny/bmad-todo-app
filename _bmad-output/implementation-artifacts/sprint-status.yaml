@@ -43,7 +43,7 @@ story_location: "{project-root}/_bmad-output/implementation-artifacts"
 
 development_status:
   # Epic 1: Task Management & Persistent List (Happy Path)
-  epic-1: in-progress
+  epic-1: done
   1-1-project-scaffold-orchestration: done
   1-2-task-persistence-layer-sqlite-schema-repository: done
   1-3-task-rest-api-get-post-patch-delete: done
@@ -52,7 +52,7 @@ development_status:
   1-6-task-list-view-with-happy-path-crud-view-complete-delete: done
   1-7-production-build-single-origin-serving: done
   1-8-baseline-tests-reducer-db-routes: done
-  epic-1-retrospective: optional
+  epic-1-retrospective: done
 
   # Epic 2: Resilience, Empty States & Trust Under Failure
   epic-2: backlog
