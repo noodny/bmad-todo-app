@@ -100,8 +100,7 @@ export function useTasks(): UseTasksReturn {
     loadCleanupRef.current = performInitialLoad();
   }, [performInitialLoad]);
 
-  // Shared mutation runner: dispatches SYNC_OK / SYNC_FAIL and detects offline
-  // (TypeError = browser fetch network failure; Error = apiClient HTTP non-2xx).
+  // Mutation runner — TypeError discriminates fetch network failure from apiClient HTTP errors.
   const runMutation = useCallback(
     (id: string, kind: PendingMutation, request: () => Promise<Task | void>) => {
       return request()

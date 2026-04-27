@@ -70,8 +70,7 @@ export function listTasks(): Task[] {
   return rows.map(rowToTask);
 }
 
-// INSERT OR IGNORE provides idempotency (NFR-R3); re-read inside the same
-// transaction so retry callers see the *original* stored row.
+// INSERT OR IGNORE idempotency (NFR-R3) + re-read returns *original* stored row on retry.
 const createTxn = db.transaction(
   (id: string, text: string, now: number): Task => {
     insertStmt.run(id, text, now);

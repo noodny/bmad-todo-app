@@ -9,7 +9,6 @@ import { useTasks, LOAD_FAIL_MESSAGE } from "@/hooks/useTasks";
 function App() {
   const { tasks, isLoading, loadError, online, createTask, toggleTask, deleteTask, retryInitialLoad, retryMutation } = useTasks();
 
-  // Story 2.1 AC5: park focus in input when the list goes empty.
   useEffect(() => {
     if (!isLoading && tasks.length === 0) {
       document.getElementById("task-input")?.focus();
@@ -33,13 +32,7 @@ function App() {
           />
         )}
         <TaskInput onSubmit={createTask} />
-        <TaskList
-          tasks={tasks}
-          isLoading={isLoading}
-          onToggle={toggleTask}
-          onDelete={deleteTask}
-          onRetry={retryMutation}
-        />
+        <TaskList tasks={tasks} isLoading={isLoading} onToggle={toggleTask} onDelete={deleteTask} onRetry={retryMutation} />
       </div>
     </main>
   );

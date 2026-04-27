@@ -32,8 +32,7 @@ const app = Fastify({
   },
 });
 
-// Fail-fast on uncaught/unhandled errors. setImmediate gives pino's async
-// buffer one tick to flush before exit; process manager restarts.
+// Fail-fast on uncaught/unhandled errors; setImmediate flushes pino before exit.
 const fatalExit = (msg: string, payload: object) => {
   app.log.error(payload, msg);
   setImmediate(() => process.exit(1));
@@ -88,7 +87,6 @@ if (isProduction) {
   });
 }
 
-// Graceful shutdown handlers
 let shuttingDown = false;
 const gracefulShutdown = async (sig: NodeJS.Signals) => {
   if (shuttingDown) {

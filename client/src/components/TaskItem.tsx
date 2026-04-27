@@ -20,7 +20,17 @@ function TaskItem({ task, onToggle, onDelete, onRetry }: TaskItemProps) {
     const fromChild = e.target !== e.currentTarget;
     if (fromChild && e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
     if (e.key === " ") { e.preventDefault(); onToggle(task.id, !task.completed); return; }
-    if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); onDelete(task.id); return; }
+    if (e.key === "Delete" || e.key === "Backspace") {
+      e.preventDefault();
+      const sib = e.currentTarget.nextElementSibling ?? e.currentTarget.previousElementSibling;
+      const fallback = sib instanceof HTMLElement && sib.tagName === "LI" ? sib : document.getElementById("task-input");
+      onDelete(task.id);
+      requestAnimationFrame(() => {
+        const target = fallback && document.contains(fallback) ? fallback : document.getElementById("task-input");
+        target?.focus();
+      });
+      return;
+    }
     if (e.key === "ArrowDown") {
       e.preventDefault();
       const next = e.currentTarget.nextElementSibling;

@@ -1,5 +1,9 @@
 # Deferred Work Log
 
+## Deferred from: code review of story 2-6-accessibility-quality-verification-pass (2026-04-27)
+
+- **No `cancelAnimationFrame` cleanup if TaskItem unmounts before rAF fires** [client/src/components/TaskItem.tsx:28-31] — Phase B1's `requestAnimationFrame(() => focus())` in the Delete/Backspace handler has no cleanup. If the parent unmounts the row before rAF executes (e.g., `INITIAL_LOAD_RETRY` swaps real rows for skeletons mid-keystroke), the callback runs with a stale closure. The Story-2.6 review-patch added `document.contains(fallback)` guard at rAF time which mitigates the worst case (no focus on detached node), but the callback itself is uncancelled. Pre-existing pattern; future hardening would move focus restoration into a `useEffect` keyed on `tasks.length`.
+
 ## Deferred from: code review of story 1-1-project-scaffold-orchestration (2026-04-24)
 
 - **Placeholder test script exits 0 without running tests** [package.json] — Matches spec intent for Story 1.1; real tests arrive in Story 1.8. No action needed; this is expected behavior.
