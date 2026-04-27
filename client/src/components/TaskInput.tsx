@@ -20,8 +20,6 @@ function TaskInput({ onSubmit }: TaskInputProps) {
   const [showOverLimit, setShowOverLimit] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // AC1 — autofocus on mount. Belt-and-suspenders alongside the autoFocus
-  // attribute, which can be unreliable in some Vite/React 19 setups.
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
@@ -31,10 +29,7 @@ function TaskInput({ onSubmit }: TaskInputProps) {
     if (showOverLimit) setShowOverLimit(false);
   };
 
-  // AC5 — native maxLength clamps typed input but does NOT reliably clamp
-  // programmatic paste cross-browser. Compute the merged value, truncate
-  // explicitly, and show the over-limit notice only when truncation
-  // actually happened.
+  // Native maxLength does not clamp paste cross-browser; truncate explicitly.
   const handlePaste = (e: ClipboardEvent<HTMLInputElement>) => {
     const pasted = e.clipboardData.getData("text");
     const target = e.currentTarget;
@@ -57,15 +52,13 @@ function TaskInput({ onSubmit }: TaskInputProps) {
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
-      // Skip Enter while an IME is composing (CJK/Korean/Japanese) so the
-      // first Enter commits the IME candidate instead of submitting a
-      // half-composed string.
+      // Skip Enter during IME composition (CJK/Korean/Japanese).
       if (e.nativeEvent.isComposing) return;
       e.preventDefault();
-      if (e.shiftKey) return; // AC9
+      if (e.shiftKey) return;
       const trimmed = value.trim();
-      if (trimmed.length === 0) return; // AC13
-      onSubmit(trimmed); // AC7
+      if (trimmed.length === 0) return;
+      onSubmit(trimmed);
       setValue("");
       setShowOverLimit(false);
       return;
@@ -76,11 +69,10 @@ function TaskInput({ onSubmit }: TaskInputProps) {
       setShowOverLimit(false);
       return;
     }
-    // Tab and other keys: fall through to default browser handling.
   };
 
   const handleBlur = () => {
-    setShowOverLimit(false); // AC6b
+    setShowOverLimit(false);
   };
 
   return (

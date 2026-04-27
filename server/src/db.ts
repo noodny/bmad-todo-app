@@ -70,10 +70,8 @@ export function listTasks(): Task[] {
   return rows.map(rowToTask);
 }
 
-// INSERT OR IGNORE gives us idempotency (NFR-R3): a retry with the same UUID
-// is a no-op at the row level. We then re-read by id inside the same
-// transaction so the caller receives the canonical stored row — on a retry,
-// that is the *original* task, even if the retry payload carried different text.
+// INSERT OR IGNORE provides idempotency (NFR-R3); re-read inside the same
+// transaction so retry callers see the *original* stored row.
 const createTxn = db.transaction(
   (id: string, text: string, now: number): Task => {
     insertStmt.run(id, text, now);
@@ -91,9 +89,7 @@ export function createTask(input: { id: string; text: string }): Task {
   return createTxn(input.id, input.text, Date.now());
 }
 
-// Deliberately narrow signature: only `completed` is patchable. Widening this
-// to allow text edits or id changes would break FR15 (immutable createdAt)
-// and the idempotency contract.
+// Narrow signature: only `completed` is patchable (FR15 immutable createdAt + idempotency).
 export function updateTask(
   id: string,
   patch: { completed: boolean },
@@ -104,8 +100,7 @@ export function updateTask(
   return row ? rowToTask(row) : null;
 }
 
-// Idempotent delete — returns regardless of whether a row existed, so the
-// caller (routes layer in Story 1.3) can translate all calls to HTTP 204.
+// Idempotent delete — returns regardless of row existence (routes translate to 204).
 export function deleteTask(id: string): void {
   deleteStmt.run(id);
 }

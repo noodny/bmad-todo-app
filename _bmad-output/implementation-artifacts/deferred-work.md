@@ -18,6 +18,18 @@
 
 - **`Date.now()` millisecond ties break deterministic ordering** [server/src/db.ts:46, 91] — Two tasks created in the same millisecond share `created_at`; `ORDER BY created_at ASC` becomes non-deterministic among ties. Essentially impossible at single-user typing cadence. Add `ORDER BY created_at ASC, id ASC` as a tiebreaker if ordering ever flakes.
 
+## Deferred from: code review of story 2-5-global-error-handling-errorboundary-uncaught-exceptions (2026-04-27)
+
+- **`unhandledRejection` behavior-change documentation** [server/src/server.ts:114] — Pre-2.5 the handler logged-only; post-2.5 it calls `process.exit(1)`. Future server code with dangling `Promise.reject` (anywhere — `someAsyncFn()` not awaited/caught) now crashes the process. Add a contributor note in CLAUDE.md or architecture.md so future authors know the rule changed. No code in current `server/src/` triggers this; deferred for Story 2.6's docs pass.
+
+- **AC7 silent-swallow audit regex is incomplete** [Story 2.5 audit pattern] — The `rg 'catch\s*(\([^)]*\))?\s*\{\s*\}'` pattern catches truly-empty bodies but misses `} catch (e) { /* ignore */ }` or whitespace-only-with-comment bodies. Verified clean by accident for current code; widen the audit pattern in Story 2.6 if the codebase grows.
+
+- **ErrorBoundary cannot recover without a full page reload** [client/src/ErrorBoundary.tsx + AC1] — By-design per AC1 (only Reload button mandated). A "Try again" reset path (`setState({hasError: false})`) would let users recover from transient render errors without losing input or optimistic state. Story 2.6 polish if anyone needs it.
+
+## Deferred from: implementation of story 2-5-global-error-handling-errorboundary-uncaught-exceptions (2026-04-27)
+
+- **Comment-density reduction across TaskInput / server.ts / apiClient / TaskItem / db.ts** [multiple files] — Story 2.5's Task 1 trimmed multi-line explanatory comments and inline AC-reference noise to fund the ~30 LOC of new error-handling code under the 1000-line NFR-M3 cap. All trims preserved the *why* of non-obvious choices (e.g., `INSERT OR IGNORE` idempotency rationale was compressed but not removed; FR15-immutable-createdAt rationale kept). If a future reviewer finds important context was lost, restore in Story 2.6 (which is the natural cleanup pass and may have more LOC headroom by then).
+
 ## Deferred from: code review of story 2-4-connectivity-detection-offline-banner (2026-04-27)
 
 - **Concurrent-mutation race on rapid clicks of the same row (pre-existing)** [client/src/hooks/useTasks.ts:122-134] — `toggleTask` / `deleteTask` / `createTask` have no in-flight guard. Rapid double-clicks fire concurrent fetch requests; out-of-order responses → server/client divergence. Pre-existing from Epic 1; not introduced by Story 2.4. Extend the `retryInFlightRef` pattern to all mutations, or use a per-id mutation generation counter.

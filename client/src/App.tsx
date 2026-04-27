@@ -23,11 +23,7 @@ function App() {
           <PageBanner
             icon={<AlertCircle className="size-5 text-destructive" />}
             message={LOAD_FAIL_MESSAGE}
-            action={
-              <Button variant="outline" size="default" onClick={retryInitialLoad}>
-                Retry
-              </Button>
-            }
+            action={<Button variant="outline" size="default" onClick={retryInitialLoad}>Retry</Button>}
           />
         )}
         {!online && (

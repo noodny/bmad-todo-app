@@ -1,9 +1,6 @@
 import type { Task } from "./types";
 
-// Native fetch only — no client library (architecture's deliberate choice
-// to preserve the NFR-M1 dep cap). Same-origin in production
-// (@fastify/static), Vite dev-server proxy in development.
-
+// Native fetch only (NFR-M1 dep cap); same-origin in prod, Vite proxy in dev.
 export async function listTasks(signal?: AbortSignal): Promise<Task[]> {
   const res = await fetch("/api/tasks", { signal });
   if (!res.ok) throw new Error(`GET /api/tasks failed: ${res.status}`);

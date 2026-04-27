@@ -17,7 +17,6 @@ function TaskItem({ task, onToggle, onDelete, onRetry }: TaskItemProps) {
   const isFailed = task.status === "failed";
 
   const handleKeyDown = (e: KeyboardEvent<HTMLLIElement>) => {
-    // Skip events from interactive children unless they're row-level navigation.
     const fromChild = e.target !== e.currentTarget;
     if (fromChild && e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
     if (e.key === " ") { e.preventDefault(); onToggle(task.id, !task.completed); return; }
@@ -47,7 +46,6 @@ function TaskItem({ task, onToggle, onDelete, onRetry }: TaskItemProps) {
       )}
     >
       {isFailed && <AlertCircle role="img" aria-label="Save failed" className="size-4 m-3.5 text-destructive" />}
-      {/* 44x44 checkbox hit area */}
       <div className="p-3.5">
         <Checkbox
           checked={task.completed}
@@ -55,7 +53,6 @@ function TaskItem({ task, onToggle, onDelete, onRetry }: TaskItemProps) {
           aria-labelledby={textId}
         />
       </div>
-      {/* Task text */}
       <span
         id={textId}
         title={task.text}

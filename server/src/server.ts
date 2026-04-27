@@ -10,7 +10,6 @@ import registerSecurityHeaders from "./security.js";
 const DEFAULT_PORT = 3000;
 const portRaw = Number(process.env.PORT ?? DEFAULT_PORT);
 
-// Validate port is in valid range
 if (Number.isNaN(portRaw) || portRaw < 0 || portRaw > 65535) {
   console.error(
     `Invalid PORT: ${process.env.PORT ?? DEFAULT_PORT}. Must be a number between 0 and 65535.`,
@@ -24,9 +23,7 @@ const app = Fastify({
   logger: {
     level: isProduction ? "info" : "debug",
   },
-  // Validation strictness (AC4): reject unknown properties (default would
-  // silently strip them) and reject non-string values (default would coerce
-  // e.g. `1` to `"1"` before the pattern check).
+  // Reject unknown props + non-string coercions (Fastify defaults strip/coerce).
   ajv: {
     customOptions: {
       removeAdditional: false,
@@ -35,20 +32,25 @@ const app = Fastify({
   },
 });
 
-// Global security headers first so the onSend hook applies to every response.
-// Called directly (not via app.register) to avoid plugin encapsulation that
-// would scope the hook to sibling plugins only.
+// Fail-fast on uncaught/unhandled errors. setImmediate gives pino's async
+// buffer one tick to flush before exit; process manager restarts.
+const fatalExit = (msg: string, payload: object) => {
+  app.log.error(payload, msg);
+  setImmediate(() => process.exit(1));
+};
+process.on("uncaughtException", (err) => fatalExit("Uncaught exception", { err }));
+process.on("unhandledRejection", (reason, promise) => fatalExit("Unhandled promise rejection", { reason, promise }));
+
+// Security headers via direct call (not register — encapsulation scopes hooks).
 registerSecurityHeaders(app);
 
-// API routes MUST register BEFORE @fastify/static so the SPA catchall
-// (in production) does not shadow /api/* (AR25).
+// AR25: API routes BEFORE @fastify/static so SPA catchall doesn't shadow /api/*.
 await app.register(tasksRoutes, { prefix: "/api" });
 
 if (isProduction) {
   const here = dirname(fileURLToPath(import.meta.url));
   const clientDist = resolve(here, "../../client/dist");
 
-  // Verify client/dist directory exists before attempting to serve
   if (!existsSync(clientDist)) {
     app.log.error(
       `Client dist directory not found at ${clientDist}. Did you run 'npm run build'?`,
@@ -115,10 +117,6 @@ const gracefulShutdown = async (sig: NodeJS.Signals) => {
 process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 
-// Handle unhandled promise rejections
-process.on("unhandledRejection", (reason, promise) => {
-  app.log.error({ reason, promise }, "Unhandled promise rejection");
-});
 
 try {
   await app.listen({ port, host: "0.0.0.0" });
