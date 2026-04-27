@@ -3,7 +3,9 @@ import { dirname, resolve } from "node:path";
 import { existsSync } from "node:fs";
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
-import { closeDb, listTasks } from "./db.js";
+import { closeDb } from "./db.js";
+import tasksRoutes from "./routes/tasks.js";
+import registerSecurityHeaders from "./security.js";
 
 const DEFAULT_PORT = 3000;
 const portRaw = Number(process.env.PORT ?? DEFAULT_PORT);
@@ -22,11 +24,25 @@ const app = Fastify({
   logger: {
     level: isProduction ? "info" : "debug",
   },
+  // Validation strictness (AC4): reject unknown properties (default would
+  // silently strip them) and reject non-string values (default would coerce
+  // e.g. `1` to `"1"` before the pattern check).
+  ajv: {
+    customOptions: {
+      removeAdditional: false,
+      coerceTypes: false,
+    },
+  },
 });
 
-// Placeholder API surface — the real /api/tasks CRUD handlers arrive in Story 1.3.
-// MUST register before @fastify/static so the SPA catchall does not shadow /api/*.
-app.get("/api/tasks", async () => listTasks());
+// Global security headers first so the onSend hook applies to every response.
+// Called directly (not via app.register) to avoid plugin encapsulation that
+// would scope the hook to sibling plugins only.
+registerSecurityHeaders(app);
+
+// API routes MUST register BEFORE @fastify/static so the SPA catchall
+// (in production) does not shadow /api/* (AR25).
+await app.register(tasksRoutes, { prefix: "/api" });
 
 if (isProduction) {
   const here = dirname(fileURLToPath(import.meta.url));
