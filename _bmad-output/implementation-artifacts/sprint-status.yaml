@@ -51,7 +51,7 @@ development_status:
   1-5-taskinput-single-field-entry-with-keyboard-commit: done
   1-6-task-list-view-with-happy-path-crud-view-complete-delete: done
   1-7-production-build-single-origin-serving: done
-  1-8-baseline-tests-reducer-db-routes: backlog
+  1-8-baseline-tests-reducer-db-routes: done
   epic-1-retrospective: optional
 
   # Epic 2: Resilience, Empty States & Trust Under Failure

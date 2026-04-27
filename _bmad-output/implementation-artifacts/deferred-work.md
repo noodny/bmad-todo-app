@@ -89,3 +89,21 @@
 - **`isProduction` strict equality misses `"production "` / `"PRODUCTION"`** [server/src/server.ts:21] — `process.env.NODE_ENV === "production"` won't match a trailing-space or differently-cased value. Inline `NODE_ENV=production` sets exactly the canonical value, so safe today. Use `process.env.NODE_ENV?.trim().toLowerCase() === "production"` for paranoid robustness.
 
 - **No automated regression test for AR25 route ordering** — `tasksRoutes` MUST register before `@fastify/static` and the SPA `setNotFoundHandler`. A future refactor could silently break `/api/*` routing by reordering. Story 1.8's smoke tests should include an explicit `GET /api/tasks` returns 200 (not the SPA shell HTML) assertion.
+
+## Deferred from: code review of story 1-8-baseline-tests-reducer-db-routes (2026-04-27)
+
+- **Module-singleton coupling between db.test.ts and routes/tasks.test.ts** [server/src/db.ts:31 + both test files' top-level `process.env.DB_PATH`] — works today because `tsx --test` runs files in separate child processes by default. If anyone ever runs them in-process (custom runner, `--test-isolation=none`), the singleton coupling silently breaks the second file. Two hardening paths: (a) document/assert `--test-isolation=process` at file top, or (b) refactor `db.ts` to expose `openDb(path)` factory + a singleton wrapper.
+
+- **AC1b ordering test relies on `Date.now()` advancing within 5 ms** [server/src/db.test.ts:39-53] — `await sleep(5)` + ms-resolution timestamps could flake under CI load. Bump to 10–20 ms or inject a clock if the test ever fails non-deterministically.
+
+- **Purity test only exercises `OPTIMISTIC_TOGGLE` with frozen input** [client/src/state/tasksReducer.test.ts:108-123] — extract a `deepFreeze` helper and apply to every action's input for stronger guard. Spec was permissive ("at least one test"); satisfied but not maximal.
+
+- **`crypto.randomUUID()` as a global** [server/src/routes/tasks.test.ts] — works on Node ≥19 with `globalThis.crypto`. `import { randomUUID } from "node:crypto"` is more portable.
+
+- **Routes test cleanup goes through HTTP `app.inject()`** [server/src/routes/tasks.test.ts:32-38] — if DELETE route is broken, cleanup cascades failures. Counter-argument: by-design, exercises the route under test. Accept trade-off; revisit if cleanup-failure noise hides real regressions.
+
+- **Temp DB files leak in `tmpdir()` if `before()` throws** [both server test files] — PID-keyed filenames are reused on PID recycling. Add a defensive pre-import `unlinkSync` or randomize the filename per run.
+
+- **Server has no eslint config** [server/] — pre-existing Story 1.1 shape. Test files (and source files) aren't linted server-side. Adding `server/eslint.config.js` would catch the kind of unused-import issue that surfaced in P1 automatically.
+
+- **Security-headers regression test + AR25 route-ordering smoke test** — both flagged as optional stretch goals in Story 1.8's Dev Notes; not pursued. Land in Story 2.6 (a11y/quality QA pass) or a dedicated "test coverage hardening" story.

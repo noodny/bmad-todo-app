@@ -9,7 +9,7 @@
     "dev": "node scripts/dev.mjs",
     "build": "npm run build --prefix client && npm run build --prefix server",
     "start": "npm start --prefix server",
-    "test": "echo \"tests arrive in Story 1.8\" && exit 0"
+    "test": "npm test --prefix client && npm test --prefix server"
   },
   "engines": {
     "node": ">=24"
