@@ -10,13 +10,16 @@ import {
   initialState,
   tasksReducer,
   type ClientTask,
+  type PendingMutation,
   type State,
 } from "@/state/tasksReducer";
+import { useConnectivity } from "./useConnectivity";
 
 interface UseTasksReturn {
   tasks: ClientTask[];
   isLoading: boolean;
   loadError: string | null;
+  online: boolean;
   createTask: (text: string) => void;
   toggleTask: (id: string, completed: boolean) => void;
   deleteTask: (id: string) => void;
@@ -42,8 +45,13 @@ export function useTasks(): UseTasksReturn {
   // Cleanup of the most recent initial-load attempt — retry aborts it first.
   const loadCleanupRef = useRef<(() => void) | null>(null);
 
-  // The local `resolved` flag + AbortController guarantee no double-dispatch
-  // across the slow-load timer / fetch / unmount races.
+  const handleConnectivity = useCallback(
+    (online: boolean) => dispatch({ type: "CONNECTIVITY_CHANGED", online }),
+    [],
+  );
+  useConnectivity(handleConnectivity);
+
+  // `resolved` + AbortController suppress double-dispatch across slow-timer/fetch/unmount.
   const performInitialLoad = useCallback(() => {
     let resolved = false;
     const controller = new AbortController();
@@ -92,39 +100,39 @@ export function useTasks(): UseTasksReturn {
     loadCleanupRef.current = performInitialLoad();
   }, [performInitialLoad]);
 
+  // Shared mutation runner: dispatches SYNC_OK / SYNC_FAIL and detects offline
+  // (TypeError = browser fetch network failure; Error = apiClient HTTP non-2xx).
+  const runMutation = useCallback(
+    (id: string, kind: PendingMutation, request: () => Promise<Task | void>) => {
+      return request()
+        .then((r) => {
+          dispatch({ type: "SYNC_OK", id, task: kind === "create" ? (r as Task) : undefined });
+          dispatch({ type: "CONNECTIVITY_CHANGED", online: true }); // success implies online — recovery path for transient TypeErrors that didn't fire window 'online' event
+        })
+        .catch((err: unknown) => {
+          console.error(`${kind} task failed:`, err);
+          dispatch({ type: "SYNC_FAIL", id });
+          if (err instanceof TypeError) dispatch({ type: "CONNECTIVITY_CHANGED", online: false });
+        });
+    },
+    [],
+  );
+
   const createTask = useCallback((text: string) => {
     const id = crypto.randomUUID();
-    dispatch({
-      type: "OPTIMISTIC_ADD",
-      task: { id, text, completed: false, createdAt: Date.now() },
-    });
-    apiCreateTask({ id, text })
-      .then((task) => dispatch({ type: "SYNC_OK", id, task }))
-      .catch((err: unknown) => {
-        console.error("Create task failed:", err);
-        dispatch({ type: "SYNC_FAIL", id });
-      });
-  }, []);
+    dispatch({ type: "OPTIMISTIC_ADD", task: { id, text, completed: false, createdAt: Date.now() } });
+    runMutation(id, "create", () => apiCreateTask({ id, text }));
+  }, [runMutation]);
 
   const toggleTask = useCallback((id: string, completed: boolean) => {
     dispatch({ type: "OPTIMISTIC_TOGGLE", id, completed });
-    apiUpdateTask(id, { completed })
-      .then(() => dispatch({ type: "SYNC_OK", id }))
-      .catch((err: unknown) => {
-        console.error("Update task failed:", err);
-        dispatch({ type: "SYNC_FAIL", id });
-      });
-  }, []);
+    runMutation(id, "toggle", () => apiUpdateTask(id, { completed }));
+  }, [runMutation]);
 
   const deleteTask = useCallback((id: string) => {
     dispatch({ type: "OPTIMISTIC_DELETE", id });
-    apiDeleteTask(id)
-      .then(() => dispatch({ type: "SYNC_OK", id }))
-      .catch((err: unknown) => {
-        console.error("Delete task failed:", err);
-        dispatch({ type: "SYNC_FAIL", id });
-      });
-  }, []);
+    runMutation(id, "delete", () => apiDeleteTask(id));
+  }, [runMutation]);
 
   const retryMutation = useCallback((id: string) => {
     if (retryInFlightRef.current.has(id)) return;
@@ -133,23 +141,18 @@ export function useTasks(): UseTasksReturn {
     retryInFlightRef.current.add(id);
     dispatch({ type: "RETRY", id });
     const m = task.pendingMutation;
-    const promise =
-      m === "create" ? apiCreateTask({ id, text: task.text })
-      : m === "toggle" ? apiUpdateTask(id, { completed: task.completed })
-      : apiDeleteTask(id);
-    promise
-      .then((r) => dispatch({ type: "SYNC_OK", id, task: m === "create" ? (r as Task) : undefined }))
-      .catch((err: unknown) => {
-        console.error(`Retry ${m} failed:`, err);
-        dispatch({ type: "SYNC_FAIL", id });
-      })
-      .finally(() => retryInFlightRef.current.delete(id));
-  }, []);
+    const request =
+      m === "create" ? () => apiCreateTask({ id, text: task.text })
+      : m === "toggle" ? () => apiUpdateTask(id, { completed: task.completed })
+      : () => apiDeleteTask(id);
+    runMutation(id, m, request).finally(() => retryInFlightRef.current.delete(id));
+  }, [runMutation]);
 
   return {
     tasks: state.tasks,
     isLoading: state.isLoading,
     loadError: state.loadError,
+    online: state.online,
     createTask,
     toggleTask,
     deleteTask,

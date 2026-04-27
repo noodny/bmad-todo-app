@@ -59,7 +59,7 @@ development_status:
   2-1-non-instructive-empty-state: done
   2-2-initial-load-failure-page-banner-with-retry: done
   2-3-per-row-failure-state-retry-optimistic-ui-upgrade: done
-  2-4-connectivity-detection-offline-banner: backlog
+  2-4-connectivity-detection-offline-banner: done
   2-5-global-error-handling-errorboundary-uncaught-exceptions: backlog
   2-6-accessibility-quality-verification-pass: backlog
   epic-2-retrospective: optional

@@ -18,6 +18,20 @@
 
 - **`Date.now()` millisecond ties break deterministic ordering** [server/src/db.ts:46, 91] — Two tasks created in the same millisecond share `created_at`; `ORDER BY created_at ASC` becomes non-deterministic among ties. Essentially impossible at single-user typing cadence. Add `ORDER BY created_at ASC, id ASC` as a tiebreaker if ordering ever flakes.
 
+## Deferred from: code review of story 2-4-connectivity-detection-offline-banner (2026-04-27)
+
+- **Concurrent-mutation race on rapid clicks of the same row (pre-existing)** [client/src/hooks/useTasks.ts:122-134] — `toggleTask` / `deleteTask` / `createTask` have no in-flight guard. Rapid double-clicks fire concurrent fetch requests; out-of-order responses → server/client divergence. Pre-existing from Epic 1; not introduced by Story 2.4. Extend the `retryInFlightRef` pattern to all mutations, or use a per-id mutation generation counter.
+
+- **Brief one-frame flash of "online" UI on cold-start while offline** [client/src/hooks/useConnectivity.ts:6 + client/src/state/tasksReducer.ts:24] — `initialState.online === true`; `useConnectivity`'s mount-time `update()` flips to actual `navigator.onLine` in the second commit. User who opens the app already-offline sees one frame of "online" UI before the banner appears. Imperceptible in practice; fix via lazy `useReducer` init (~3 LOC) if anyone notices.
+
+- **`instanceof TypeError` may catch non-network programmer errors** [client/src/hooks/useTasks.ts:113] — A `TypeError` thrown anywhere in `runMutation`'s `.then` chain gets misclassified as offline. Wrap only `request()` in the network-error catch; let dispatch errors propagate. Pairs with the Story 2.2 `AbortError` detection-breadth deferral.
+
+- **`navigator.onLine` is unreliable on captive portals and some browsers** [client/src/hooks/useConnectivity.ts:5] — Hotel/airport WiFi awaiting login reports `true`; some Safari versions have false positives. Fully reliable detection requires active probing of `/api/health`. Platform constraint; consider in Story 2.6 if user reports surface this.
+
+- **Two simultaneous `aria-live="assertive"` banners may compete on NVDA** [client/src/App.tsx:22-38] — When both `loadError` AND `!online` fire, two assertive live regions mount simultaneously. NVDA may truncate the first announcement. Options: downgrade offline banner to `polite`, unify into one banner with priority-based message, or accept the rare-cross-fire. Story 2.6 a11y pass to decide.
+
+- **`<AlertCircle role="img">` cross-screen-reader variance** [client/src/components/TaskItem.tsx:49] — Modern JAWS handles `role="img" + aria-label` on `<svg>` correctly; older JAWS (pre-2018) needed an inner `<title>`. Verify cross-SR matrix in Story 2.6's a11y QA.
+
 ## Deferred from: code review of story 2-3-per-row-failure-state-retry-optimistic-ui-upgrade (2026-04-27)
 
 - **Re-toggle of a soft-deleted row corrupts state** [client/src/state/tasksReducer.ts:39-43] — `OPTIMISTIC_TOGGLE` overwrites `pendingMutation: 'delete'` to `'toggle'` even for soft-deleted rows. UI doesn't expose the path (rows are filtered out), but assistive tech / programmatic clicks could reach it. Guard `OPTIMISTIC_TOGGLE` and re-dispatched `OPTIMISTIC_DELETE` against `pending+delete` rows.

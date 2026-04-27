@@ -13,15 +13,17 @@ export type Action =
   | { type: "OPTIMISTIC_DELETE"; id: string }
   | { type: "SYNC_OK"; id: string; task?: Task }
   | { type: "SYNC_FAIL"; id: string }
-  | { type: "RETRY"; id: string };
+  | { type: "RETRY"; id: string }
+  | { type: "CONNECTIVITY_CHANGED"; online: boolean };
 
 export interface State {
   tasks: ClientTask[];
   isLoading: boolean;
   loadError: string | null;
+  online: boolean;
 }
 
-export const initialState: State = { tasks: [], isLoading: true, loadError: null };
+export const initialState: State = { tasks: [], isLoading: true, loadError: null, online: true };
 
 // AR21: pure reducer — no side effects, no mutation.
 export function tasksReducer(state: State, action: Action): State {
@@ -50,6 +52,8 @@ export function tasksReducer(state: State, action: Action): State {
       return { ...state, tasks: mapTask(action.id, (t) => ({ ...t, status: "failed" })) };
     case "RETRY":
       return { ...state, tasks: mapTask(action.id, (t) => ({ ...t, status: "pending" })) };
+    case "CONNECTIVITY_CHANGED":
+      return state.online === action.online ? state : { ...state, online: action.online };
     default: {
       const _exhaustive: never = action;
       return _exhaustive;

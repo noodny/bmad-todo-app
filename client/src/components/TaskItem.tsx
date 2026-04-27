@@ -18,39 +18,19 @@ function TaskItem({ task, onToggle, onDelete, onRetry }: TaskItemProps) {
 
   const handleKeyDown = (e: KeyboardEvent<HTMLLIElement>) => {
     // Skip events from interactive children unless they're row-level navigation.
-    const target = e.target as HTMLElement;
-    if (target !== e.currentTarget) {
-      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
-    }
-
-    if (e.key === " ") {
-      e.preventDefault();
-      onToggle(task.id, !task.completed);
-      return;
-    }
-    if (e.key === "Delete" || e.key === "Backspace") {
-      e.preventDefault();
-      onDelete(task.id);
-      return;
-    }
+    const fromChild = e.target !== e.currentTarget;
+    if (fromChild && e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    if (e.key === " ") { e.preventDefault(); onToggle(task.id, !task.completed); return; }
+    if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); onDelete(task.id); return; }
     if (e.key === "ArrowDown") {
       e.preventDefault();
       const next = e.currentTarget.nextElementSibling;
-      if (next instanceof HTMLElement && next.tagName === "LI") {
-        next.focus();
-      }
-      return;
-    }
-    if (e.key === "ArrowUp") {
+      if (next instanceof HTMLElement && next.tagName === "LI") next.focus();
+    } else if (e.key === "ArrowUp") {
       e.preventDefault();
       const prev = e.currentTarget.previousElementSibling;
-      if (prev instanceof HTMLElement && prev.tagName === "LI") {
-        prev.focus();
-      } else {
-        // First row → focus TaskInput.
-        document.getElementById("task-input")?.focus();
-      }
-      return;
+      if (prev instanceof HTMLElement && prev.tagName === "LI") prev.focus();
+      else document.getElementById("task-input")?.focus();
     }
   };
 
@@ -66,11 +46,7 @@ function TaskItem({ task, onToggle, onDelete, onRetry }: TaskItemProps) {
         task.completed && "opacity-60",
       )}
     >
-      {isFailed && (
-        <span role="img" aria-label="Save failed" className="p-3.5">
-          <AlertCircle className="size-4 text-destructive" />
-        </span>
-      )}
+      {isFailed && <AlertCircle role="img" aria-label="Save failed" className="size-4 m-3.5 text-destructive" />}
       {/* 44x44 checkbox hit area */}
       <div className="p-3.5">
         <Checkbox

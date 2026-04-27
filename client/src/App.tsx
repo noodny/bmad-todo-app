@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageBanner } from "@/components/PageBanner";
 import TaskInput from "@/components/TaskInput";
@@ -7,7 +7,7 @@ import TaskList from "@/components/TaskList";
 import { useTasks, LOAD_FAIL_MESSAGE } from "@/hooks/useTasks";
 
 function App() {
-  const { tasks, isLoading, loadError, createTask, toggleTask, deleteTask, retryInitialLoad, retryMutation } = useTasks();
+  const { tasks, isLoading, loadError, online, createTask, toggleTask, deleteTask, retryInitialLoad, retryMutation } = useTasks();
 
   // Story 2.1 AC5: park focus in input when the list goes empty.
   useEffect(() => {
@@ -28,6 +28,12 @@ function App() {
                 Retry
               </Button>
             }
+          />
+        )}
+        {!online && (
+          <PageBanner
+            icon={<WifiOff className="size-5" />}
+            message="Offline — changes will sync when you reconnect."
           />
         )}
         <TaskInput onSubmit={createTask} />

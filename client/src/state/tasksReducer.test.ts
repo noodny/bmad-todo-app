@@ -18,11 +18,12 @@ const stateWithTasks = (tasks: ClientTask[]): State => ({
   tasks,
   isLoading: false,
   loadError: null,
+  online: true,
 });
 
 describe("tasksReducer", () => {
   it("INITIAL_LOAD_OK wraps wire tasks with status: 'synced'", () => {
-    const start: State = { tasks: [], isLoading: true, loadError: "stale" };
+    const start: State = { tasks: [], isLoading: true, loadError: "stale", online: true };
     const next = tasksReducer(start, {
       type: "INITIAL_LOAD_OK",
       tasks: [taskA, taskB],
@@ -52,6 +53,7 @@ describe("tasksReducer", () => {
       tasks: prevTasks,
       isLoading: false,
       loadError: "Could not load tasks.",
+      online: true,
     }) as State;
     const next = tasksReducer(start, { type: "INITIAL_LOAD_RETRY" });
     expect(next.isLoading).toBe(true);
@@ -152,6 +154,7 @@ describe("tasksReducer", () => {
       tasks: Object.freeze([frozenInput]) as readonly ClientTask[] as ClientTask[],
       isLoading: false,
       loadError: null,
+      online: true,
     });
     const action: Action = { type: "OPTIMISTIC_TOGGLE", id: "a", completed: true };
     const out1 = tasksReducer(frozenState, action);
@@ -172,11 +175,34 @@ describe("tasksReducer", () => {
     expect(next).not.toBe(start);
   });
 
-  it("initial state is { tasks: [], isLoading: true, loadError: null }", () => {
+  it("initial state is { tasks: [], isLoading: true, loadError: null, online: true }", () => {
     expect(initialState).toEqual({
       tasks: [],
       isLoading: true,
       loadError: null,
+      online: true,
     });
+  });
+
+  it("CONNECTIVITY_CHANGED({ online: false }) flips state.online; preserves tasks/isLoading/loadError", () => {
+    const start = Object.freeze({
+      tasks: [synced(taskA)],
+      isLoading: false,
+      loadError: null,
+      online: true,
+    }) as State;
+    const next = tasksReducer(start, { type: "CONNECTIVITY_CHANGED", online: false });
+    expect(next.online).toBe(false);
+    expect(next.tasks).toBe(start.tasks);
+    expect(next.isLoading).toBe(false);
+    expect(next.loadError).toBeNull();
+    expect(next).not.toBe(start);
+  });
+
+  it("CONNECTIVITY_CHANGED({ online: true }) flips state.online back to true", () => {
+    const start = stateWithTasks([]);
+    const offline: State = { ...start, online: false };
+    const next = tasksReducer(offline, { type: "CONNECTIVITY_CHANGED", online: true });
+    expect(next.online).toBe(true);
   });
 });
