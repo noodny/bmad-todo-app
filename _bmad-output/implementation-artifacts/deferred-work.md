@@ -18,6 +18,18 @@
 
 - **`Date.now()` millisecond ties break deterministic ordering** [server/src/db.ts:46, 91] — Two tasks created in the same millisecond share `created_at`; `ORDER BY created_at ASC` becomes non-deterministic among ties. Essentially impossible at single-user typing cadence. Add `ORDER BY created_at ASC, id ASC` as a tiebreaker if ordering ever flakes.
 
+## Deferred from: code review of story 2-1-non-instructive-empty-state (2026-04-27)
+
+- **TaskInput mount timing edge case** [client/src/App.tsx:10-14] — If TaskInput hasn't mounted when useEffect runs, focus call fails silently. Acceptable for this simple feature; React's rendering guarantees component mount order in practice.
+
+- **Rapid state transition focus spam** [client/src/App.tsx:10-14] — Multiple focus calls during quick deletions are harmless (focus is idempotent). Edge case unlikely in normal usage.
+
+- **Error state focus behavior** [client/src/App.tsx:10-14] — Focus still triggers during load errors. Acceptable since input remains functional and user can still attempt task creation.
+
+- **Mobile/touch device focus handling** [client/src/App.tsx:10-14] — Programmatic focus may trigger virtual keyboards on mobile. Acceptable for this desktop-first app; touch UX refinements belong in broader mobile optimization story.
+
+- **Concurrent user input interruption** [client/src/App.tsx:10-14] — Focus stealing from other fields is a valid concern but rare in this single-input app. Full focus management belongs in comprehensive a11y story (2.6).
+
 - **No `busy_timeout` pragma** [server/src/db.ts:32-33] — Default is 0, so any future contention raises `SQLITE_BUSY` immediately with no wait. Set to ~5000ms when concurrency (e.g., background workers, multiple processes) appears.
 
 - **`unhandledRejection` handler does not trigger DB shutdown** [server/src/server.ts:95-97] — Pre-existing Story 1.1 shape; current handler only logs, leaving the process in an inconsistent state with the DB still open.
