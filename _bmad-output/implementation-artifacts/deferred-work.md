@@ -55,3 +55,25 @@
 - **Cmd / Ctrl / Alt + Enter still submits** [client/src/components/TaskInput.tsx:60] — only `shiftKey` is the "skip submit" modifier per spec; other modifier chords fall through to submit. Tighten to "no modifiers" if a future user reports surprises.
 
 - **`console.log` placeholder in `App.tsx`'s `handleSubmit`** [client/src/App.tsx:5-6] — Story 1.6 will replace it with the reducer dispatch + POST. If 1.6 slips and any prod build ships before then, gate the log on `import.meta.env.DEV`.
+
+## Deferred from: code review of story 1-6-task-list-view-with-happy-path-crud-view-complete-delete (2026-04-27)
+
+- **AC5 checkbox-tick 0→1 scale animation does not run** [client/src/components/ui/checkbox.tsx:21] — shadcn's `<CheckboxPrimitive.Indicator>` ships `transition-none` and Radix only mounts the indicator when checked, so the tick appears instantly. The 100 ms ease-out scale required by AC5 needs either editing the primitive (against story rule) or a custom indicator with `forceMount` + scale CSS. Best handled by Story 2.6 (a11y/quality pass) or a dedicated polish story.
+
+- **ROLLBACK clobbers concurrent successful mutations** [client/src/hooks/useTasks.ts + state/tasksReducer.ts ROLLBACK case] — uniform `ROLLBACK { previousTasks }` restores the full snapshot, which can wipe out unrelated optimistic mutations that succeeded between the failed mutation's dispatch and rejection. Spec-acknowledged trade-off for single-user MVP. Story 2.3's per-row `'failed'` status will replace this with surgical per-action rollback.
+
+- **Focus is lost into `<body>` after deleting the focused row** [client/src/components/TaskItem.tsx Delete/Backspace handler] — keyboard users land on `<body>` after delete with no focus restoration. Capture next/previous sibling before optimistic delete and re-focus after the next render. Defer to Story 2.6.
+
+- **Mutation errors are silent (`console.error` only)** [client/src/hooks/useTasks.ts mutation `.catch` blocks] — failed POST/PATCH/DELETE trigger ROLLBACK but the user sees no UI feedback. Story 2.3 introduces per-row `'failed'` status + Retry affordance.
+
+- **`aria-live="polite"` on the data `<ul>` may over-announce** [client/src/components/TaskList.tsx] — every list mutation re-reads content. Spec mandates the live region on the `<ul>` (AC16); revisit during Story 2.6 if SR testing surfaces noise.
+
+- **`apiClient` does no Content-Type validation on 2xx responses** [client/src/api/apiClient.ts] — non-JSON 200 (e.g., dev-server SPA fallback returning HTML) would crash `.json()` and trigger misleading rollback. Add `if (!res.headers.get("content-type")?.includes("application/json")) throw ...` before `.json()` if this surfaces.
+
+- **Server-shape responses are unchecked-cast (`as Task`)** [client/src/api/apiClient.ts] — contract drift breaks at runtime, not at compile time. Architecture's AR23 accepts this trade-off. Add `zod`-style runtime validation if a future story introduces contract churn.
+
+- **`crypto.randomUUID()` requires a secure context** [client/src/hooks/useTasks.ts createTask] — throws on plain-HTTP non-localhost deployments. Architecture's single-origin model assumes HTTPS or localhost; if a non-secure deployment surfaces, add a feature-detect polyfill.
+
+- **`document.getElementById("task-input")` hardcodes Story 1.5's TaskInput id** [client/src/components/TaskItem.tsx ArrowUp branch] — first-row ArrowUp navigation will break if Story 1.5's input id ever changes. Pass a ref through props if multi-instance scenarios appear.
+
+- **No fetch abort on unmount for mutations** [client/src/hooks/useTasks.ts mutation handlers] — `.then`/`.catch` may dispatch into a torn-down reducer if the user navigates away mid-fetch. React 19 logs a warning. Extend the initial-load `cancelled` flag pattern to the three mutation callbacks if this becomes observable.

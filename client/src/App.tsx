@@ -1,17 +1,20 @@
 import TaskInput from "@/components/TaskInput";
+import TaskList from "@/components/TaskList";
+import { useTasks } from "@/hooks/useTasks";
 
 function App() {
-  const handleSubmit = (text: string) => {
-    // Story 1.6 will replace this with a reducer dispatch + POST /api/tasks.
-    console.log("TaskInput submitted:", text);
-  };
+  const { tasks, isLoading, createTask, toggleTask, deleteTask } = useTasks();
 
   return (
     <main className="mx-auto max-w-150 p-4 md:p-8 pt-8 md:pt-16">
       <div className="flex flex-col gap-6 md:gap-8">
-        <TaskInput onSubmit={handleSubmit} />
-        {/* TaskList slot — Story 1.6 */}
-        <div data-slot="task-list" />
+        <TaskInput onSubmit={createTask} />
+        <TaskList
+          tasks={tasks}
+          isLoading={isLoading}
+          onToggle={toggleTask}
+          onDelete={deleteTask}
+        />
       </div>
     </main>
   );
