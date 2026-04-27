@@ -19,7 +19,11 @@ interface UseTasksReturn {
   createTask: (text: string) => void;
   toggleTask: (id: string, completed: boolean) => void;
   deleteTask: (id: string) => void;
+  retryInitialLoad: () => void;
 }
+
+const SLOW_LOAD_MS = 10_000;
+export const LOAD_FAIL_MESSAGE = "Could not load tasks.";
 
 export function useTasks(): UseTasksReturn {
   const [state, dispatch] = useReducer(tasksReducer, initialState);
@@ -31,24 +35,59 @@ export function useTasks(): UseTasksReturn {
     tasksRef.current = state.tasks;
   }, [state.tasks]);
 
-  // Initial fetch.
-  useEffect(() => {
-    let cancelled = false;
-    listTasks()
+  // Cleanup of the most recent initial-load attempt — retry aborts it first.
+  const loadCleanupRef = useRef<(() => void) | null>(null);
+
+  // The local `resolved` flag + AbortController guarantee no double-dispatch
+  // across the slow-load timer / fetch / unmount races.
+  const performInitialLoad = useCallback(() => {
+    let resolved = false;
+    const controller = new AbortController();
+    const slowTimer = setTimeout(() => {
+      if (resolved) return;
+      resolved = true;
+      controller.abort();
+      dispatch({ type: "INITIAL_LOAD_FAIL", message: LOAD_FAIL_MESSAGE });
+    }, SLOW_LOAD_MS);
+
+    listTasks(controller.signal)
       .then((tasks) => {
-        if (cancelled) return;
+        if (resolved) return;
+        resolved = true;
+        clearTimeout(slowTimer);
         dispatch({ type: "INITIAL_LOAD_OK", tasks });
       })
       .catch((err: unknown) => {
-        if (cancelled) return;
-        const message = err instanceof Error ? err.message : String(err);
+        if (resolved) return;
+        resolved = true;
+        clearTimeout(slowTimer);
+        // Suppress AbortError: it surfaces from our own slow-load abort
+        // (the timer's dispatch already fired the FAIL) or from unmount.
+        if (err instanceof DOMException && err.name === "AbortError") return;
         console.error("Initial load failed:", err);
-        dispatch({ type: "INITIAL_LOAD_FAIL", message });
+        dispatch({ type: "INITIAL_LOAD_FAIL", message: LOAD_FAIL_MESSAGE });
       });
+
     return () => {
-      cancelled = true;
+      resolved = true;
+      controller.abort();
+      clearTimeout(slowTimer);
     };
   }, []);
+
+  useEffect(() => {
+    loadCleanupRef.current = performInitialLoad();
+    return () => {
+      loadCleanupRef.current?.();
+      loadCleanupRef.current = null;
+    };
+  }, [performInitialLoad]);
+
+  const retryInitialLoad = useCallback(() => {
+    loadCleanupRef.current?.(); // abort prior attempt's controller + timer
+    dispatch({ type: "INITIAL_LOAD_RETRY" });
+    loadCleanupRef.current = performInitialLoad();
+  }, [performInitialLoad]);
 
   const createTask = useCallback((text: string) => {
     const id = crypto.randomUUID();
@@ -103,5 +142,6 @@ export function useTasks(): UseTasksReturn {
     createTask,
     toggleTask,
     deleteTask,
+    retryInitialLoad,
   };
 }

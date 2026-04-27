@@ -18,6 +18,24 @@
 
 - **`Date.now()` millisecond ties break deterministic ordering** [server/src/db.ts:46, 91] — Two tasks created in the same millisecond share `created_at`; `ORDER BY created_at ASC` becomes non-deterministic among ties. Essentially impossible at single-user typing cadence. Add `ORDER BY created_at ASC, id ASC` as a tiebreaker if ordering ever flakes.
 
+## Deferred from: code review of story 2-2-initial-load-failure-page-banner-with-retry (2026-04-27)
+
+- **Banner re-announcement may be suppressed on identical retry-fail** [client/src/components/PageBanner.tsx + client/src/App.tsx:41] — NVDA/JAWS may suppress identical consecutive `aria-live="assertive"` announcements when Retry → Fail repeats with the same copy. Force re-announce via a `key` change tied to attempt count or via slight message variation. Land in Story 2.6 a11y/quality QA pass.
+
+- **AbortError detection is too narrow** [client/src/hooks/useTasks.ts:65] — `err instanceof DOMException && err.name === "AbortError"` covers modern browsers but misses environments where abort surfaces as a plain `Error` (some polyfills, Node fetch, undici). Theoretical for our SPA-in-browser deployment; hardening to `err && typeof err === 'object' && (err as any).name === 'AbortError'` is defensive belt-and-braces.
+
+- **Strict-mode dev-only console pollution during fast unmount** [client/src/hooks/useTasks.ts:67] — In React 18+ Strict Mode dev (mount → cleanup → remount), if a real (non-abort) error lands during the brief unmount window AND `resolved` was already set by cleanup, `console.error` fires before the suppressed dispatch. Dev-noise only; production unaffected.
+
+- **`loadError` not cleared by mutation actions** [client/src/state/tasksReducer.ts:33-46] — If the load fails (banner shown) and the user types a task and presses Enter, `OPTIMISTIC_ADD` runs but `loadError` stays set; the banner remains above the freshly-typed task. Latent UX inconsistency. Story 2.6 should decide whether mutation success should clear the load-failed banner.
+
+- **PageBanner has no manual dismiss path** [client/src/components/PageBanner.tsx + client/src/App.tsx:41] — Banner persists until a successful retry; no close button. WCAG 2.4.1 (no dismissable persistent content) is a stylistic concern, not a hard violation. Spec doesn't mandate dismiss; revisit in Story 2.6.
+
+## Deferred from: implementation of story 2-2-initial-load-failure-page-banner-with-retry (2026-04-27)
+
+- **AC10 — visible fade-in not wired (rAF mount-flip not implemented)** [client/src/App.tsx PageBanner render] — `PageBanner` already has `transition-opacity duration-200 ease-out` baked into its root, so the *class* requirement of AC10 is satisfied. But to see a visible 200 ms fade-in, App.tsx needs an `opacity-0 → opacity-100` flip on mount via `useState(false)` + `useEffect(() => requestAnimationFrame(() => setMounted(true)))`. Estimated cost: ~10 LOC. Skipped to preserve LOC headroom (Story 2.2 landed at 993/1000). Banner currently appears instantly at full opacity. Land in Story 2.6.
+
+- **AC11 — fade-out on dismiss not wired (3-state machinery)** [client/src/App.tsx PageBanner render] — Conditional `{loadError && <PageBanner ...>}` unmounts the banner instantly when `loadError` clears (e.g. after successful Retry). To get the 100 ms `ease-in` fade-out, App.tsx needs `'hidden' | 'visible' | 'fading-out'` state with a `setTimeout(100)` between `loadError === null` and unmount. Estimated cost: ~15 LOC. Skipped for the same LOC-pressure reason. Pair with the AC10 fade-in fix in Story 2.6.
+
 ## Deferred from: code review of story 2-1-non-instructive-empty-state (2026-04-27)
 
 - **TaskInput mount timing edge case** [client/src/App.tsx:10-14] — If TaskInput hasn't mounted when useEffect runs, focus call fails silently. Acceptable for this simple feature; React's rendering guarantees component mount order in practice.

@@ -3,6 +3,7 @@ import type { Task } from "@/api/types";
 export type Action =
   | { type: "INITIAL_LOAD_OK"; tasks: Task[] }
   | { type: "INITIAL_LOAD_FAIL"; message: string }
+  | { type: "INITIAL_LOAD_RETRY" }
   | { type: "OPTIMISTIC_ADD"; task: Task }
   | { type: "OPTIMISTIC_TOGGLE"; id: string; completed: boolean }
   | { type: "OPTIMISTIC_DELETE"; id: string }
@@ -34,6 +35,8 @@ export function tasksReducer(state: State, action: Action): State {
       };
     case "INITIAL_LOAD_FAIL":
       return { ...state, isLoading: false, loadError: action.message };
+    case "INITIAL_LOAD_RETRY":
+      return { ...state, isLoading: true, loadError: null };
     case "OPTIMISTIC_ADD":
       return { ...state, tasks: [...state.tasks, action.task] };
     case "OPTIMISTIC_TOGGLE":

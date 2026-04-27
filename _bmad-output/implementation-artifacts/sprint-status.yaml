@@ -57,7 +57,7 @@ development_status:
   # Epic 2: Resilience, Empty States & Trust Under Failure
   epic-2: in-progress
   2-1-non-instructive-empty-state: done
-  2-2-initial-load-failure-page-banner-with-retry: backlog
+  2-2-initial-load-failure-page-banner-with-retry: done
   2-3-per-row-failure-state-retry-optimistic-ui-upgrade: backlog
   2-4-connectivity-detection-offline-banner: backlog
   2-5-global-error-handling-errorboundary-uncaught-exceptions: backlog

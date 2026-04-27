@@ -44,6 +44,20 @@ describe("tasksReducer", () => {
     });
   });
 
+  it("INITIAL_LOAD_RETRY sets loading, clears error, preserves tasks", () => {
+    const prevTasks: Task[] = [];
+    const start = Object.freeze({
+      tasks: prevTasks,
+      isLoading: false,
+      loadError: "Could not load tasks.",
+    }) as State;
+    const next = tasksReducer(start, { type: "INITIAL_LOAD_RETRY" });
+    expect(next.isLoading).toBe(true);
+    expect(next.loadError).toBeNull();
+    expect(next.tasks).toBe(prevTasks); // reference unchanged
+    expect(next).not.toBe(start); // new state object
+  });
+
   it("OPTIMISTIC_ADD appends to tasks (newest at the bottom)", () => {
     const start = stateWithTasks([taskA, taskB]);
     const next = tasksReducer(start, { type: "OPTIMISTIC_ADD", task: taskC });

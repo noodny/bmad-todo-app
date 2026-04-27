@@ -4,8 +4,8 @@ import type { Task } from "./types";
 // to preserve the NFR-M1 dep cap). Same-origin in production
 // (@fastify/static), Vite dev-server proxy in development.
 
-export async function listTasks(): Promise<Task[]> {
-  const res = await fetch("/api/tasks");
+export async function listTasks(signal?: AbortSignal): Promise<Task[]> {
+  const res = await fetch("/api/tasks", { signal });
   if (!res.ok) throw new Error(`GET /api/tasks failed: ${res.status}`);
   return (await res.json()) as Task[];
 }
