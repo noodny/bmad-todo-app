@@ -50,7 +50,7 @@ development_status:
   1-4-frontend-design-foundation-shadcn-ui-theme-layout: done
   1-5-taskinput-single-field-entry-with-keyboard-commit: done
   1-6-task-list-view-with-happy-path-crud-view-complete-delete: done
-  1-7-production-build-single-origin-serving: backlog
+  1-7-production-build-single-origin-serving: done
   1-8-baseline-tests-reducer-db-routes: backlog
   epic-1-retrospective: optional
 

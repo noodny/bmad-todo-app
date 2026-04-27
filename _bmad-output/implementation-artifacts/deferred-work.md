@@ -77,3 +77,15 @@
 - **`document.getElementById("task-input")` hardcodes Story 1.5's TaskInput id** [client/src/components/TaskItem.tsx ArrowUp branch] — first-row ArrowUp navigation will break if Story 1.5's input id ever changes. Pass a ref through props if multi-instance scenarios appear.
 
 - **No fetch abort on unmount for mutations** [client/src/hooks/useTasks.ts mutation handlers] — `.then`/`.catch` may dispatch into a torn-down reducer if the user navigates away mid-fetch. React 19 logs a warning. Extend the initial-load `cancelled` flag pattern to the three mutation callbacks if this becomes observable.
+
+## Deferred from: code review of story 1-7-production-build-single-origin-serving (2026-04-27)
+
+- **Windows `cmd.exe` does not parse inline `NODE_ENV=production cmd` syntax** [server/package.json:10] — `npm start` would fail on Windows. Spec explicitly accepts macOS/Linux scope. Swap to `--env-file=.env.production` (file containing `NODE_ENV=production`) or add `cross-env` devDep if Windows support ever lands.
+
+- **AC7 / AC8 perf measurements need a real-browser pass** — Story 1.7 measured TTFB as a proxy because no real browser environment was available in the dev session. A code reviewer or QA should open Chromium DevTools against `npm start`, capture FCP/FMP and Network→paint deltas, and confirm the budgets (1000 ms / 200 ms) hold before any production deploy. Numbers are very likely fine (74.5 KB gzip bundle + sub-ms server response), but the spec literally requires DevTools Performance.
+
+- **Orchestrator `scripts/dev.mjs` inherits outer `NODE_ENV`** [scripts/dev.mjs:6-10, 33-34] — if the dev has `NODE_ENV=production` exported in their shell or `.envrc`, `npm run dev` runs as production mode and the dev server fails to boot (no `client/dist/` exists in dev). Fix when `scripts/dev.mjs` is next touched: pass `env: { ...process.env, NODE_ENV: undefined }` to the `spawn` options. Pre-existing Story 1.1 shape; not introduced by this story.
+
+- **`isProduction` strict equality misses `"production "` / `"PRODUCTION"`** [server/src/server.ts:21] — `process.env.NODE_ENV === "production"` won't match a trailing-space or differently-cased value. Inline `NODE_ENV=production` sets exactly the canonical value, so safe today. Use `process.env.NODE_ENV?.trim().toLowerCase() === "production"` for paranoid robustness.
+
+- **No automated regression test for AR25 route ordering** — `tasksRoutes` MUST register before `@fastify/static` and the SPA `setNotFoundHandler`. A future refactor could silently break `/api/*` routing by reordering. Story 1.8's smoke tests should include an explicit `GET /api/tasks` returns 200 (not the SPA shell HTML) assertion.
