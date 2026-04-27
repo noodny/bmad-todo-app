@@ -45,3 +45,13 @@
 - **No favicon** [client/index.html, client/public/] — browsers will 404 on `/favicon.ico`. Ship a same-origin SVG favicon (NFR-S4 compliant) when convenient.
 
 - **`outline-ring/50` applied to the universal `*` selector** [client/src/index.css:71-73] — verbatim from shadcn CLI's `@layer base` scaffold. Don't edit unless it causes spurious focus rings on non-interactive elements; if so, scope to `:where([role], button, [tabindex])`-style selectors.
+
+## Deferred from: code review of story 1-5-taskinput-single-field-entry-with-keyboard-commit (2026-04-27)
+
+- **`String.prototype.trim()` doesn't strip zero-width / BOM characters** [client/src/components/TaskInput.tsx:62] — theoretical edge case where a paste of only zero-width chars (`​`, `‍`, `﻿`) bypasses the empty-check and submits a non-empty-but-invisible task. Low risk for a single-user app; revisit if a "reject all-whitespace-like input" requirement appears.
+
+- **Layout shifts ~20 px when over-limit notice appears/disappears** [client/src/components/TaskInput.tsx:83 + parent gap] — visible vertical jump in the sibling task-list slot. Reserve space via `min-h-5` on the wrapper or render the notice with `invisible` class when hidden. Not in current spec; visual polish.
+
+- **Cmd / Ctrl / Alt + Enter still submits** [client/src/components/TaskInput.tsx:60] — only `shiftKey` is the "skip submit" modifier per spec; other modifier chords fall through to submit. Tighten to "no modifiers" if a future user reports surprises.
+
+- **`console.log` placeholder in `App.tsx`'s `handleSubmit`** [client/src/App.tsx:5-6] — Story 1.6 will replace it with the reducer dispatch + POST. If 1.6 slips and any prod build ships before then, gate the log on `import.meta.env.DEV`.
