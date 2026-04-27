@@ -19,4 +19,13 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    // shadcn primitives canonically co-export components and helpers
+    // (e.g., Button + buttonVariants). HMR refresh isn't relevant for
+    // these files; the rule's tradeoff doesn't apply.
+    files: ['src/components/ui/**/*.{ts,tsx}'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 ])

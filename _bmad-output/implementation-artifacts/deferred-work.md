@@ -33,3 +33,15 @@
 - **No response schemas on GET / POST / PATCH** [server/src/routes/tasks.ts:46,48,58] — adding response schemas would prevent accidental column leakage if `db.ts` ever returns extra fields, and would enable Fastify's fast-json-stringify path. Not in current spec; nice-to-have.
 
 - **No `connectionTimeout` / `requestTimeout` on Fastify** [server/src/server.ts:23-36] — Slowloris-class slow-body attacks remain possible. Pre-existing Story 1.1 shape; not in PRD scope.
+
+## Deferred from: code review of story 1-4-frontend-design-foundation-shadcn-ui-theme-layout (2026-04-27)
+
+- **`prefers-reduced-motion` rule may zero out Radix state-change transitions** [client/src/index.css:83-91] — the spec literally mandates the AC11 pattern (`transition-duration: 0ms !important` on `*, *::before, *::after`), so user-visible behavior matches the AC. If reduced-motion users report jarring instant state-changes (Checkbox check/uncheck, Button press), revisit with a rule that distinguishes pure motion from state-change transitions.
+
+- **Empty `data-slot` divs render a blank page until Stories 1.5/1.6 ship** [client/src/App.tsx:6-8] — by design; these are anchors that get replaced. If a deploy happens before 1.5/1.6, add a placeholder skeleton row + visually-hidden heading so users don't land on a fully blank page.
+
+- **`dark:*` utility classes from shadcn primitives emit dead CSS** [client/dist/assets/index-*.css] — known trade-off from the AC6 deviation. `@custom-variant dark (&:is(.dark *))` scopes the rules to a never-applied ancestor; cost is a few hundred bytes of unreachable CSS. Acceptable for the lifetime of this spec.
+
+- **No favicon** [client/index.html, client/public/] — browsers will 404 on `/favicon.ico`. Ship a same-origin SVG favicon (NFR-S4 compliant) when convenient.
+
+- **`outline-ring/50` applied to the universal `*` selector** [client/src/index.css:71-73] — verbatim from shadcn CLI's `@layer base` scaffold. Don't edit unless it causes spurious focus rings on non-interactive elements; if so, scope to `:where([role], button, [tabindex])`-style selectors.
