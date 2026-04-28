@@ -42,6 +42,7 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at);
 `);
 
+const healthStmt = db.prepare("SELECT 1 AS ok");
 const selectAllStmt = db.prepare(
   "SELECT id, text, completed, created_at FROM tasks ORDER BY created_at ASC",
 );
@@ -106,4 +107,10 @@ export function deleteTask(id: string): void {
 
 export function closeDb(): void {
   db.close();
+}
+
+// Throws if the connection is broken or the file is unreadable.
+export function healthCheck(): void {
+  const row = healthStmt.get() as { ok: number } | undefined;
+  if (row?.ok !== 1) throw new Error("DB sanity check failed");
 }

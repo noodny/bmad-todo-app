@@ -1,18 +1,46 @@
-# Two-container deploy: nginx serves SPA + reverse-proxies /api → fastify backend.
-# SQLite is embedded in the backend; durable data lives in the named volume.
+# Three deploy modes, selected via compose profiles (mutually exclusive):
+#   docker compose --profile prod up        → prod   (nginx + fastify)
+#   docker compose --profile dev  up        → dev    (vite HMR + tsx watch)
+#   docker compose --profile test run …     → test   (one-off test runners)
+#
+# `docker compose up` with no profile starts nothing — pick one. To make `prod`
+# the implicit default, copy .env.docker.example → .env (sets COMPOSE_PROFILES).
+# Override knobs via environment / .env (see .env.docker.example).
+# Logs: every service writes to stdout/stderr → reachable via `docker compose logs`.
 
+# ─── Reusable fragments ──────────────────────────────────────────────────────
+# Bounded log files so a runaway service can't fill the host disk.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "${LOG_MAX_SIZE:-10m}"
+    max-file: "${LOG_MAX_FILE:-3}"
+
+# Hardening shared by long-running prod services.
+x-security: &default-security
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+
+# ─── Services ────────────────────────────────────────────────────────────────
 services:
+
+  # ── PROD ───────────────────────────────────────────────────────────────────
   backend:
+    profiles: ["prod"]
     build:
       context: ./server
       dockerfile: Dockerfile
-    image: bmad-test-backend:local
+      target: runtime
+    image: ${IMAGE_REPO:-bmad-test}-backend:${IMAGE_TAG:-local}
     container_name: bmad-test-backend
     environment:
       NODE_ENV: production
       PORT: "3000"
       DB_PATH: /data/tasks.db
       SERVE_STATIC: "false"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
     volumes:
       - tasks-data:/data
     networks:
@@ -20,32 +48,31 @@ services:
     expose:
       - "3000"
     restart: unless-stopped
-    # Resource caps keep a runaway process from starving the host.
-    mem_limit: 512m
+    mem_limit: ${BACKEND_MEM_LIMIT:-512m}
     pids_limit: 256
     read_only: true
     tmpfs:
       - /tmp
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
+    <<: *default-security
+    logging: *default-logging
     healthcheck:
       test:
         - "CMD"
         - "node"
         - "-e"
-        - "fetch('http://127.0.0.1:3000/api/tasks').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        - "fetch('http://127.0.0.1:3000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
       interval: 30s
       timeout: 5s
       start_period: 10s
       retries: 3
 
   frontend:
+    profiles: ["prod"]
     build:
       context: ./client
       dockerfile: Dockerfile
-    image: bmad-test-frontend:local
+      target: runtime
+    image: ${IMAGE_REPO:-bmad-test}-frontend:${IMAGE_TAG:-local}
     container_name: bmad-test-frontend
     depends_on:
       backend:
@@ -55,31 +82,134 @@ services:
     networks:
       - bmad-net
     restart: unless-stopped
-    mem_limit: 128m
+    mem_limit: ${FRONTEND_MEM_LIMIT:-128m}
     pids_limit: 128
     read_only: true
-    # nginx writes pid + temp files; keep them in tmpfs since FS is read-only.
     tmpfs:
       - /tmp
       - /var/cache/nginx
       - /var/run
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    # nginx needs net_bind_service to bind low ports; we listen on 8080 so this stays dropped.
+    <<: *default-security
+    logging: *default-logging
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
       interval: 30s
       timeout: 5s
       start_period: 5s
       retries: 3
 
+  # ── DEV ────────────────────────────────────────────────────────────────────
+  # Hot-reload backend (tsx watch) — bind-mounts src for live edits.
+  backend-dev:
+    profiles: ["dev"]
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+      target: dev
+    image: ${IMAGE_REPO:-bmad-test}-backend:dev
+    container_name: bmad-test-backend-dev
+    environment:
+      NODE_ENV: development
+      PORT: "3000"
+      DB_PATH: /data/tasks.db
+      SERVE_STATIC: "false"
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+    volumes:
+      - ./server/src:/app/src:cached
+      - dev-tasks-data:/data
+    networks:
+      - bmad-net
+    ports:
+      - "${BACKEND_DEV_PORT:-3000}:3000"
+    logging: *default-logging
+    healthcheck:
+      test:
+        - "CMD"
+        - "node"
+        - "-e"
+        - "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      start_period: 15s
+      retries: 5
+
+  # Vite dev server with HMR. Proxies /api → backend-dev (see vite.config.ts).
+  frontend-dev:
+    profiles: ["dev"]
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      target: dev
+    image: ${IMAGE_REPO:-bmad-test}-frontend:dev
+    container_name: bmad-test-frontend-dev
+    depends_on:
+      backend-dev:
+        condition: service_healthy
+    environment:
+      VITE_API_URL: http://backend-dev:3000
+    volumes:
+      - ./client/src:/app/src:cached
+      - ./client/index.html:/app/index.html:cached
+      - ./client/vite.config.ts:/app/vite.config.ts:cached
+      - ./client/tsconfig.app.json:/app/tsconfig.app.json:cached
+      - ./client/tsconfig.node.json:/app/tsconfig.node.json:cached
+      - ./client/tsconfig.json:/app/tsconfig.json:cached
+    networks:
+      - bmad-net
+    ports:
+      - "${FRONTEND_DEV_PORT:-5173}:5173"
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:5173/"]
+      interval: 15s
+      timeout: 5s
+      start_period: 15s
+      retries: 5
+
+  # ── TEST ───────────────────────────────────────────────────────────────────
+  # Run with: docker compose --profile test run --rm test-server
+  test-server:
+    profiles: ["test"]
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+      target: dev
+    image: ${IMAGE_REPO:-bmad-test}-backend:dev
+    environment:
+      NODE_ENV: test
+      DB_PATH: /tmp/test.db
+    networks:
+      - bmad-net
+    command: ["npm", "test"]
+    restart: "no"
+    logging: *default-logging
+
+  # Run with: docker compose --profile test run --rm test-client
+  test-client:
+    profiles: ["test"]
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      target: dev
+    image: ${IMAGE_REPO:-bmad-test}-frontend:dev
+    environment:
+      NODE_ENV: test
+      CI: "true"
+    networks:
+      - bmad-net
+    command: ["npm", "test"]
+    restart: "no"
+    logging: *default-logging
+
+# ─── Volumes ─────────────────────────────────────────────────────────────────
 volumes:
   tasks-data:
-    name: bmad-test-tasks-data
+    name: ${VOLUME_PREFIX:-bmad-test}-tasks-data
+  dev-tasks-data:
+    name: ${VOLUME_PREFIX:-bmad-test}-dev-tasks-data
 
+# ─── Networks ────────────────────────────────────────────────────────────────
 networks:
   bmad-net:
-    name: bmad-test-net
+    name: ${NETWORK_NAME:-bmad-test-net}
     driver: bridge

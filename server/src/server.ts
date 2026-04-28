@@ -5,6 +5,7 @@ import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
 import { closeDb } from "./db.js";
 import tasksRoutes from "./routes/tasks.js";
+import healthRoutes from "./routes/health.js";
 import registerSecurityHeaders from "./security.js";
 
 const DEFAULT_PORT = 3000;
@@ -23,7 +24,8 @@ const serveStatic = process.env.SERVE_STATIC !== "false";
 
 const app = Fastify({
   logger: {
-    level: isProduction ? "info" : "debug",
+    // Explicit LOG_LEVEL wins; otherwise default by environment.
+    level: process.env.LOG_LEVEL ?? (isProduction ? "info" : "debug"),
   },
   // Reject unknown props + non-string coercions (Fastify defaults strip/coerce).
   ajv: {
@@ -44,6 +46,10 @@ process.on("unhandledRejection", (reason, promise) => fatalExit("Unhandled promi
 
 // Security headers via direct call (not register — encapsulation scopes hooks).
 registerSecurityHeaders(app);
+
+// Health endpoints intentionally live outside /api — they're for orchestrators
+// (Docker/k8s probes), not API consumers. No prefix keeps them stable.
+await app.register(healthRoutes);
 
 // AR25: API routes BEFORE @fastify/static so SPA catchall doesn't shadow /api/*.
 await app.register(tasksRoutes, { prefix: "/api" });
