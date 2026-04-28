@@ -8,14 +8,14 @@ RUN npm ci
 
 # ─── Stage 2: build (vite SPA bundle) ────────────────────────────────────────
 FROM deps AS build
-COPY tsconfig.json tsconfig.app.json tsconfig.node.json vite.config.ts index.html components.json ./
+COPY tsconfig.json tsconfig.app.json tsconfig.node.json vite.config.ts vitest.config.ts index.html components.json ./
 COPY src ./src
 RUN npm run build
 
 # ─── Stage 3: dev (vite dev server with HMR) ─────────────────────────────────
 # Used by the `dev` compose profile — bind-mount src on /app/src for hot reload.
 FROM deps AS dev
-COPY tsconfig.json tsconfig.app.json tsconfig.node.json vite.config.ts index.html components.json ./
+COPY tsconfig.json tsconfig.app.json tsconfig.node.json vite.config.ts vitest.config.ts index.html components.json ./
 COPY src ./src
 ENV NODE_ENV=development \
     HOST=0.0.0.0 \
