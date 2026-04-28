@@ -1,5 +1,22 @@
 # Deferred Work Log
 
+## Spec deviation: Playwright E2E suite added (2026-04-28)
+
+**Status:** intentional course-correction by the project lead, post-Epic-2 retro.
+
+The PRD/architecture explicitly rejected end-to-end tests (Playwright/Cypress) for v1 — see Story 1.8 dev notes ("End-to-end tests (Playwright, Cypress) — explicitly rejected in PRD/architecture for v1"). After Epic 2 closed, the project lead requested Playwright coverage of the five Journey 1 scenarios: create / complete / delete / empty state / error handling. Coverage now lives at `client/e2e/journey.spec.ts` (5 tests, all passing on Chromium).
+
+Implementation choices:
+- `@playwright/test` added as a **client devDep** (not a prod dep). NFR-M1's 10/10 prod-dep cap is unaffected.
+- Only Chromium browser binary installed (`npx playwright install chromium`); webkit and firefox can be added later if cross-browser CI is needed.
+- Test fixture creates an isolated DB at `server/data/e2e.db` (gitignored) via the `DB_PATH` env var threaded through `playwright.config.ts`'s `webServer.command`.
+- Each test clears the DB via `DELETE /api/tasks/:id` calls before its scenario; `fullyParallel: false` + `workers: 1` because tests share a single backend.
+- Run via `npm run test:e2e` (root) or `npm run test:e2e --prefix client`. Requires Node ≥ 24 (the project's existing engine constraint).
+
+Future maintenance: this is the only formal departure from the PRD's "no E2E in v1" rule. If Epic 3 or later happens, consider whether the rule is still load-bearing or whether the E2E suite has earned its keep.
+
+
+
 ## Deferred from: code review of story 2-6-accessibility-quality-verification-pass (2026-04-27)
 
 - **No `cancelAnimationFrame` cleanup if TaskItem unmounts before rAF fires** [client/src/components/TaskItem.tsx:28-31] — Phase B1's `requestAnimationFrame(() => focus())` in the Delete/Backspace handler has no cleanup. If the parent unmounts the row before rAF executes (e.g., `INITIAL_LOAD_RETRY` swaps real rows for skeletons mid-keystroke), the callback runs with a stale closure. The Story-2.6 review-patch added `document.contains(fallback)` guard at rAF time which mitigates the worst case (no focus on detached node), but the callback itself is uncancelled. Pre-existing pattern; future hardening would move focus restoration into a `useEffect` keyed on `tasks.length`.
