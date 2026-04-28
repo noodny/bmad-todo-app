@@ -18,6 +18,8 @@ if (Number.isNaN(portRaw) || portRaw < 0 || portRaw > 65535) {
 }
 const port = portRaw;
 const isProduction = process.env.NODE_ENV === "production";
+// Opt-out for split-tier deploys (e.g. nginx serves SPA, this process serves API only).
+const serveStatic = process.env.SERVE_STATIC !== "false";
 
 const app = Fastify({
   logger: {
@@ -46,7 +48,7 @@ registerSecurityHeaders(app);
 // AR25: API routes BEFORE @fastify/static so SPA catchall doesn't shadow /api/*.
 await app.register(tasksRoutes, { prefix: "/api" });
 
-if (isProduction) {
+if (isProduction && serveStatic) {
   const here = dirname(fileURLToPath(import.meta.url));
   const clientDist = resolve(here, "../../client/dist");
 

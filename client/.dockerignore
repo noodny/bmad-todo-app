@@ -1,0 +1,15 @@
+node_modules
+dist
+test-results
+playwright-report
+e2e
+.env
+.env.*
+!.env.example
+.git
+.gitignore
+.DS_Store
+**/.DS_Store
+Dockerfile
+.dockerignore
+README.md

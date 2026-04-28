@@ -1,0 +1,85 @@
+# Two-container deploy: nginx serves SPA + reverse-proxies /api → fastify backend.
+# SQLite is embedded in the backend; durable data lives in the named volume.
+
+services:
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    image: bmad-test-backend:local
+    container_name: bmad-test-backend
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DB_PATH: /data/tasks.db
+      SERVE_STATIC: "false"
+    volumes:
+      - tasks-data:/data
+    networks:
+      - bmad-net
+    expose:
+      - "3000"
+    restart: unless-stopped
+    # Resource caps keep a runaway process from starving the host.
+    mem_limit: 512m
+    pids_limit: 256
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test:
+        - "CMD"
+        - "node"
+        - "-e"
+        - "fetch('http://127.0.0.1:3000/api/tasks').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    image: bmad-test-frontend:local
+    container_name: bmad-test-frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-8080}:8080"
+    networks:
+      - bmad-net
+    restart: unless-stopped
+    mem_limit: 128m
+    pids_limit: 128
+    read_only: true
+    # nginx writes pid + temp files; keep them in tmpfs since FS is read-only.
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # nginx needs net_bind_service to bind low ports; we listen on 8080 so this stays dropped.
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 5s
+      retries: 3
+
+volumes:
+  tasks-data:
+    name: bmad-test-tasks-data
+
+networks:
+  bmad-net:
+    name: bmad-test-net
+    driver: bridge
